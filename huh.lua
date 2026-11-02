@@ -1454,7 +1454,7 @@ local function FetchServers()
                             ShowToast("Teleporting...", "success")
                             
                             if queue_on_teleport then
-                                queue_on_teleport('loadstring(game:HttpGet(loadstring(game:HttpGet("https://raw.githubusercontent.com/lIllIIIlIlllIIllllIIlIlIlIlIlIlIl/thingamabob/refs/heads/main/huh.lua"))()')
+                                queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/lIllIIIlIlllIIllllIIlIlIlIlIlIlIl/thingamabob/refs/heads/main/huh.lua"))()')
                             end
 
                             task.spawn(function()
@@ -2564,38 +2564,44 @@ end)
 local lastTypeVisible = false
 local lastRequiredLetter = ""
 
--- Manual submissions use the SAME acceptance check as autotype:
--- capture the word before Enter, then mark it used only if CurrentWord clears
--- or changes after submission. The helper SearchBox is excluded by requiring
--- the focused TextBox to belong to PlayerGui.InGame.
+-- Manual submissions read the actual game's CurrentWord letter labels.
+-- This game does not need to expose a focused TextBox for its word input.
+-- The helper's own search boxes are ignored, and autotype submissions are
+-- left to the existing autotype tracking.
 local manualSubmitPending = false
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if unloaded or input.KeyCode ~= Enum.KeyCode.Return and input.KeyCode ~= Enum.KeyCode.KeypadEnter then
+    if unloaded or isTyping then return end
+    if input.KeyCode ~= Enum.KeyCode.Return
+        and input.KeyCode ~= Enum.KeyCode.KeypadEnter then
         return
     end
 
-    local player = Players.LocalPlayer
-    local gui = player and player:FindFirstChild("PlayerGui")
-    local inGame = gui and gui:FindFirstChild("InGame")
     local focusedBox = UserInputService:GetFocusedTextBox()
-    if not inGame or not focusedBox or not focusedBox:IsDescendantOf(inGame) then
+    if focusedBox and focusedBox:IsDescendantOf(ScreenGui) then
+        return -- Enter in the helper's search/settings fields is not a game submission.
+    end
+
+    if manualSubmitPending then return end
+
+    local candidate = GetCurrentGameWord()
+    candidate = (candidate or ""):lower():gsub("[%s%c]+", "")
+    if candidate == "" or not IsDictionaryWord(candidate) then
         return
     end
 
-    local candidate = (focusedBox.Text or ""):lower():gsub("[%s%c]+", "")
-    if candidate == "" or not IsDictionaryWord(candidate) or manualSubmitPending then
-        return
-    end
-
-    local currentDetected = GetCurrentGameWord()
+    local initialWord = candidate
     manualSubmitPending = true
+
     task.spawn(function()
         local verifyStart = tick()
         local accepted = false
+
+        -- Match the same verification used by autotype: the displayed
+        -- CurrentWord must clear or change after Enter is submitted.
         while not unloaded and (tick() - verifyStart) < 1.5 do
-            local currentCheck = GetCurrentGameWord()
-            if currentCheck == "" or (currentCheck ~= candidate and currentCheck ~= currentDetected) then
+            local currentCheck = (GetCurrentGameWord() or ""):lower():gsub("[%s%c]+", "")
+            if currentCheck == "" or currentCheck ~= initialWord then
                 accepted = true
                 break
             end
@@ -2603,8 +2609,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
 
         if accepted and not unloaded then
-            MarkWordUsed(candidate)
+            MarkWordUsed(initialWord)
         end
+
         manualSubmitPending = false
     end)
 end)
