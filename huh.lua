@@ -2659,15 +2659,20 @@ local function TrackOpponentWords()
 
             if label then
                 local current = (label.Text or ""):lower():gsub("[%s%c]+", "")
-                if current ~= "" then
+                local isPlaceholder = current == "..." or current == "…" or current == ""
+
+                if not isPlaceholder then
+                    -- Keep the last real word; the bubble can reset straight to
+                    -- "..." after submission without ever passing through empty.
                     state.candidate = current
-                elseif state.lastText ~= "" then
-                    local submitted = state.candidate ~= "" and state.candidate or state.lastText
+                elseif state.candidate ~= "" then
+                    local submitted = state.candidate
                     if IsDictionaryWord(submitted) then
                         MarkWordUsed(submitted)
                     end
                     state.candidate = ""
                 end
+
                 state.lastText = current
             end
         end
