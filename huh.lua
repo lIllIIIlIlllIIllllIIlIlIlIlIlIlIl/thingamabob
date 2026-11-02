@@ -143,7 +143,7 @@ logConn = LogService.MessageOut:Connect(function(message, type)
     end
 end)
 
-local url = "https://raw.githubusercontent.com/unkn0wnidentities/SKRV2/refs/heads/main/ther3aldiction4ry.txt"
+local url = "https://raw.githubusercontent.com/lIllIIIlIlllIIllllIIlIlIlIlIlIlIl/thingamabob/refs/heads/main/goodmorningusa.txt"
 local fileName = "ultimate_words_v4.txt"
 
 -- Temporary Loading UI
@@ -1454,7 +1454,7 @@ local function FetchServers()
                             ShowToast("Teleporting...", "success")
                             
                             if queue_on_teleport then
-                                queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/unkn0wnidentities/SKRV2/refs/heads/main/main.lua"))()')
+                                queue_on_teleport('loadstring(game:HttpGet(loadstring(game:HttpGet("https://raw.githubusercontent.com/lIllIIIlIlllIIllllIIlIlIlIlIlIlIl/thingamabob/refs/heads/main/huh.lua"))()')
                             end
 
                             task.spawn(function()
