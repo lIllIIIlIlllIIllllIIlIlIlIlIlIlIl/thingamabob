@@ -3115,9 +3115,70 @@ runConn = RunService.RenderStepped:Connect(function()
         end
     end)
 end)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
-print("DEBUG TEST: SCRIPT REACHED THE END")
+task.spawn(function()
+    while task.wait(2) do
+        print("===== OPPONENT TRACKING DEBUG =====")
 
-task.delay(3, function()
-    print("DEBUG TEST: 3 SECONDS PASSED")
+        local tables = workspace:FindFirstChild("Tables")
+        print("Tables folder:", tables ~= nil)
+
+        local character = LocalPlayer.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+
+        if root then
+            print("Your position:", root.Position)
+
+            if tables then
+                for i = 1, 6 do
+                    local tableModel = tables:FindFirstChild(tostring(i))
+                    local chairs = tableModel and tableModel:FindFirstChild("Chairs")
+
+                    if chairs then
+                        for j = 1, 2 do
+                            local chair = chairs:FindFirstChild(tostring(j))
+                            local base = chair and chair:FindFirstChild("Base")
+
+                            if base and base:IsA("BasePart") then
+                                local dx = root.Position.X - base.Position.X
+                                local dz = root.Position.Z - base.Position.Z
+                                local distance = math.sqrt(dx * dx + dz * dz)
+
+                                print(
+                                    "Table:", i,
+                                    "Chair:", j,
+                                    "Distance:", distance
+                                )
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            print("ERROR: Your HumanoidRootPart was not found")
+        end
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local model = workspace:FindFirstChild(player.Name)
+                print("Other player:", player.Name, "Workspace model:", model ~= nil)
+
+                if model then
+                    local head = model:FindFirstChild("Head")
+                    local hair = head and head:FindFirstChild("HairAttachment")
+                    local bubble = hair and hair:FindFirstChild("Bubble")
+                    local answer = bubble and bubble:FindFirstChild("Answer")
+                    local letter = answer and answer:FindFirstChild("Letter")
+
+                    print("Word label found:", letter ~= nil)
+
+                    if letter and letter:IsA("TextLabel") then
+                        print("Displayed word:", letter.Text)
+                    end
+                end
+            end
+        end
+    end
 end)
