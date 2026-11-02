@@ -585,6 +585,29 @@ StatusText.Size = UDim2.new(1, -15, 1, 0)
 StatusText.Position = UDim2.new(0, 15, 0, 0)
 StatusText.BackgroundTransparency = 1
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.Size = UDim2.new(1, -95, 1, 0)
+
+local ResetWordsBtn = Instance.new("TextButton", StatusFrame)
+ResetWordsBtn.Name = "ResetUsedWords"
+ResetWordsBtn.Size = UDim2.new(0, 78, 0, 22)
+ResetWordsBtn.Position = UDim2.new(1, -78, 0.5, -11)
+ResetWordsBtn.BackgroundColor3 = THEME.ItemBG
+ResetWordsBtn.BorderSizePixel = 0
+ResetWordsBtn.Text = "Reset Words"
+ResetWordsBtn.TextColor3 = THEME.Text
+ResetWordsBtn.Font = Enum.Font.GothamMedium
+ResetWordsBtn.TextSize = 10
+Instance.new("UICorner", ResetWordsBtn).CornerRadius = UDim.new(0, 5)
+
+ResetWordsBtn.MouseButton1Click:Connect(function()
+    table.clear(UsedWords)
+    table.clear(RandomOrderCache)
+    table.clear(RandomPriority)
+    table.clear(opponentWordStates)
+    forceUpdateList = true
+    StatusText.Text = "Used words reset"
+    StatusText.TextColor3 = THEME.Success
+end)
 
 local SearchFrame = Instance.new("Frame", MainFrame)
 SearchFrame.Size = UDim2.new(1, -10, 0, 26)
@@ -2662,10 +2685,9 @@ local function TrackOpponentWords()
                 local isPlaceholder = current == "..." or current == "…" or current == ""
 
                 if not isPlaceholder then
-                    -- Keep the last real word; the bubble can reset straight to
-                    -- "..." after submission without ever passing through empty.
                     state.candidate = current
                 elseif state.candidate ~= "" then
+                    -- The bubble may reset directly from the submitted word to dots.
                     local submitted = state.candidate
                     if IsDictionaryWord(submitted) then
                         MarkWordUsed(submitted)
