@@ -143,7 +143,7 @@ logConn = LogService.MessageOut:Connect(function(message, type)
     end
 end)
 
-local url = "https://raw.githubusercontent.com/lIllIIIlIlllIIllllIIlIlIlIlIlIlIl/thingamabob/refs/heads/main/goodmorningusa.txt"
+local url = "https://raw.githubusercontent.com/unkn0wnidentities/SKRV2/refs/heads/main/ther3aldiction4ry.txt"
 local fileName = "ultimate_words_v4.txt"
 
 -- Temporary Loading UI
@@ -1454,7 +1454,7 @@ local function FetchServers()
                             ShowToast("Teleporting...", "success")
                             
                             if queue_on_teleport then
-                                queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/lIllIIIlIlllIIllllIIlIlIlIlIlIlIl/thingamabob/refs/heads/main/huh.lua"))()')
+                                queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/unkn0wnidentities/SKRV2/refs/heads/main/main.lua"))()')
                             end
 
                             task.spawn(function()
@@ -2564,42 +2564,50 @@ end)
 local lastTypeVisible = false
 local lastRequiredLetter = ""
 
--- Track the text as a candidate, but only mark it used when the player
--- submits it with Enter. Typing in the helper SearchBox never consumes words.
-local trackedGameTextBox = nil
-local trackedGameTextConnections = {}
-local latestGameCandidate = ""
+-- Manual submissions use the SAME acceptance check as autotype:
+-- capture the word before Enter, then mark it used only if CurrentWord clears
+-- or changes after submission. The helper SearchBox is excluded by requiring
+-- the focused TextBox to belong to PlayerGui.InGame.
+local manualSubmitPending = false
 
-local function TrackGameTextBox(box)
-    if trackedGameTextBox == box then return end
-    for _, connection in ipairs(trackedGameTextConnections) do
-        connection:Disconnect()
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if unloaded or input.KeyCode ~= Enum.KeyCode.Return and input.KeyCode ~= Enum.KeyCode.KeypadEnter then
+        return
     end
-    table.clear(trackedGameTextConnections)
-    trackedGameTextBox = box
-    latestGameCandidate = ""
 
-    if box and box:IsA("TextBox") then
-        local function rememberText()
-            local candidate = box.Text or ""
-            candidate = candidate:lower():gsub("[%s%c]+", "")
-            if candidate ~= "" and IsDictionaryWord(candidate) then
-                latestGameCandidate = candidate
+    local player = Players.LocalPlayer
+    local gui = player and player:FindFirstChild("PlayerGui")
+    local inGame = gui and gui:FindFirstChild("InGame")
+    local focusedBox = UserInputService:GetFocusedTextBox()
+    if not inGame or not focusedBox or not focusedBox:IsDescendantOf(inGame) then
+        return
+    end
+
+    local candidate = (focusedBox.Text or ""):lower():gsub("[%s%c]+", "")
+    if candidate == "" or not IsDictionaryWord(candidate) or manualSubmitPending then
+        return
+    end
+
+    local currentDetected = GetCurrentGameWord()
+    manualSubmitPending = true
+    task.spawn(function()
+        local verifyStart = tick()
+        local accepted = false
+        while not unloaded and (tick() - verifyStart) < 1.5 do
+            local currentCheck = GetCurrentGameWord()
+            if currentCheck == "" or (currentCheck ~= candidate and currentCheck ~= currentDetected) then
+                accepted = true
+                break
             end
+            task.wait(0.05)
         end
 
-        rememberText()
-        table.insert(trackedGameTextConnections, box:GetPropertyChangedSignal("Text"):Connect(rememberText))
-        table.insert(trackedGameTextConnections, box.FocusLost:Connect(function(enterPressed)
-            if unloaded or not enterPressed then return end
-            local candidate = latestGameCandidate
-            if candidate ~= "" and IsDictionaryWord(candidate) then
-                MarkWordUsed(candidate)
-            end
-            latestGameCandidate = ""
-        end))
-    end
-end
+        if accepted and not unloaded then
+            MarkWordUsed(candidate)
+        end
+        manualSubmitPending = false
+    end)
+end)
 
 local StatsData = {}
 
@@ -2688,9 +2696,6 @@ runConn = RunService.RenderStepped:Connect(function()
         end
         local detected, censored = cachedDetected, cachedCensored
 
-        -- Track only the actual game's input box. The helper SearchBox is
-        -- deliberately excluded, and a word is consumed only on Enter.
-        TrackGameTextBox(GetActualGameTextBox())
 
         if isVisible and isMyTurn and not isTyping and seconds and seconds < 1.5 then
             local char = (requiredLetter or ""):lower()
