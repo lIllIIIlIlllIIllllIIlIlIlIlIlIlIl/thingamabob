@@ -2639,78 +2639,167 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end)
 end)
 
--- Track opponents' displayed words from their replicated character models.
--- Their word bubble is at Character.Head.HairAttachment.Bubble.Answer.Letter.
--- Save a candidate while it is displayed, and mark it used when the bubble
--- clears after submission. This avoids consuming partial words as they type.
+-- Opponent word tracking using Tables, Chairs, and Base positions.
 local opponentWordStates = {}
+local currentOpponent = nil
+
+local function HorizontalDistance(a, b)
+    local dx = a.X - b.X
+    local dz = a.Z - b.Z
+    return math.sqrt(dx * dx + dz * dz)
+end
+
+local function GetBase(chairs, chairName)
+    local chair = chairs and chairs:FindFirstChild(chairName)
+    return chair and chair:FindFirstChild("Base")
+end
+
+local function GetOpponent()
+    local tables = workspace:FindFirstChild("Tables")
+    if not tables then
+        return nil
+    end
+
+    local myCharacter = Players.LocalPlayer.Character
+    local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+    if not myRoot then
+        return nil
+    end
+
+    -- Find which table and side our character is closest to.
+    for i = 1, 6 do
+        local tableModel = tables:FindFirstChild(tostring(i))
+        local chairs = tableModel and tableModel:FindFirstChild("Chairs")
+
+        if chairs then
+            local base1 = GetBase(chairs, "1")
+            local base2 = GetBase(chairs, "2")
+
+            if base1 and base2 and base1:IsA("BasePart") and base2:IsA("BasePart") then
+                local distance1 = HorizontalDistance(
+                    myRoot.Position,
+                    base1.Position
+                )
+
+                local distance2 = HorizontalDistance(
+                    myRoot.Position,
+                    base2.Position
+                )
+
+                local opponentBase = nil
+
+                if distance1 <= 4 then
+                    opponentBase = base2
+                elseif distance2 <= 4 then
+                    opponentBase = base1
+                end
+
+                if opponentBase then
+                    -- Find the player whose character is near the opposite Base.
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        if player ~= Players.LocalPlayer then
+                            local character = player.Character
+                            local root = character and character:FindFirstChild("HumanoidRootPart")
+
+                            if root then
+                                local distance = HorizontalDistance(
+                                    root.Position,
+                                    opponentBase.Position
+                                )
+
+                                if distance <= 4 then
+                                    return player
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
 
 local function GetOpponentWordLabel(player)
     local character = player and player.Character
     local head = character and character:FindFirstChild("Head")
-    local hairAttachment = head and head:FindFirstChild("HairAttachment")
-    local bubble = hairAttachment and hairAttachment:FindFirstChild("Bubble")
+    local hair = head and head:FindFirstChild("HairAttachment")
+    local bubble = hair and hair:FindFirstChild("Bubble")
     local answer = bubble and bubble:FindFirstChild("Answer")
     local letter = answer and answer:FindFirstChild("Letter")
 
     if letter and letter:IsA("TextLabel") then
         return letter
     end
+
     return nil
 end
 
 local function TrackOpponentWords()
-    if unloaded then return end
-
-    local present = {}
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= Players.LocalPlayer then
-            present[player] = true
-            local label = GetOpponentWordLabel(player)
-            local state = opponentWordStates[player]
-
-            if not state then
-                state = { label = label, lastText = "", candidate = "" }
-                opponentWordStates[player] = state
-            end
-
-            if state.label ~= label then
-                state.label = label
-                state.lastText = ""
-                state.candidate = ""
-            end
-
-            if label then
-                local current = (label.Text or ""):lower():gsub("[%s%c]+", "")
-                local isPlaceholder = current == "..." or current == "…" or current == ""
-
-                if not isPlaceholder then
-                    state.candidate = current
-                elseif state.candidate ~= "" then
-                    -- The bubble may reset directly from the submitted word to dots.
-                    local submitted = state.candidate
-                    if IsDictionaryWord(submitted) then
-                        MarkWordUsed(submitted)
-                    end
-                    state.candidate = ""
-                end
-
-                state.lastText = current
-            end
-        end
+    if unloaded then
+        return
     end
 
-    for player in pairs(opponentWordStates) do
-        if not present[player] then
-            opponentWordStates[player] = nil
+    local opponent = GetOpponent()
+
+    -- Clear the previous opponent's tracking when the match changes.
+    if opponent ~= currentOpponent then
+        opponentWordStates = {}
+        currentOpponent = opponent
+    end
+
+    if not opponent then
+        return
+    end
+
+    local label = GetOpponentWordLabel(opponent)
+    if not label then
+        return
+    end
+
+    local state = opponentWordStates[opponent]
+
+    if not state then
+        state = {
+            label = label,
+            candidate = "",
+        }
+
+        opponentWordStates[opponent] = state
+    elseif state.label ~= label then
+        state.label = label
+        state.candidate = ""
+    end
+
+    local current = (label.Text or ""):lower():gsub("[%s%c]+", "")
+
+    -- Ignore placeholder text.
+    if current == "" or current == "..." or current == "…" then
+        if state.candidate ~= "" then
+            local submitted = state.candidate
+            state.candidate = ""
+
+            if IsDictionaryWord(submitted) then
+                MarkWordUsed(submitted)
+            end
         end
+    else
+        -- Remember the last word displayed before it resets.
+        state.candidate = current
     end
 end
 
 task.spawn(function()
     while not unloaded do
-        TrackOpponentWords()
-        task.wait(0.1)
+        local success, err = pcall(TrackOpponentWords)
+
+        if not success then
+            warn("[WordHelper] Opponent tracking error:", err)
+        end
+
+        task.wait(0.05)
     end
 end)
 
