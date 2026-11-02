@@ -2616,6 +2616,77 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end)
 end)
 
+-- Track opponents' displayed words from their replicated character models.
+-- Their word bubble is at Character.Head.HairAttachment.Bubble.Answer.Letter.
+-- Save a candidate while it is displayed, and mark it used when the bubble
+-- clears after submission. This avoids consuming partial words as they type.
+local opponentWordStates = {}
+
+local function GetOpponentWordLabel(player)
+    local character = player and player.Character
+    local head = character and character:FindFirstChild("Head")
+    local hairAttachment = head and head:FindFirstChild("HairAttachment")
+    local bubble = hairAttachment and hairAttachment:FindFirstChild("Bubble")
+    local answer = bubble and bubble:FindFirstChild("Answer")
+    local letter = answer and answer:FindFirstChild("Letter")
+
+    if letter and letter:IsA("TextLabel") then
+        return letter
+    end
+    return nil
+end
+
+local function TrackOpponentWords()
+    if unloaded then return end
+
+    local present = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            present[player] = true
+            local label = GetOpponentWordLabel(player)
+            local state = opponentWordStates[player]
+
+            if not state then
+                state = { label = label, lastText = "", candidate = "" }
+                opponentWordStates[player] = state
+            end
+
+            if state.label ~= label then
+                state.label = label
+                state.lastText = ""
+                state.candidate = ""
+            end
+
+            if label then
+                local current = (label.Text or ""):lower():gsub("[%s%c]+", "")
+                if current ~= "" then
+                    state.candidate = current
+                elseif state.lastText ~= "" then
+                    local submitted = state.candidate ~= "" and state.candidate or state.lastText
+                    if IsDictionaryWord(submitted) then
+                        MarkWordUsed(submitted)
+                    end
+                    state.candidate = ""
+                end
+                state.lastText = current
+            end
+        end
+    end
+
+    for player in pairs(opponentWordStates) do
+        if not present[player] then
+            opponentWordStates[player] = nil
+        end
+    end
+end
+
+task.spawn(function()
+    while not unloaded do
+        TrackOpponentWords()
+        task.wait(0.1)
+    end
+end)
+
 local StatsData = {}
 
 do
