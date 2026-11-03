@@ -522,7 +522,7 @@ Header.BackgroundColor3 = THEME.ItemBG
 Header.BorderSizePixel = 0
 
 local Title = Instance.new("TextLabel", Header)
-Title.Text = "Word<font color=\"rgb(114,100,255)\">Helper</font> V4"
+Title.Text = "Word<font color=\"rgb(114,100,255)\">Helper</font> V5"
 Title.RichText = true
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -2639,36 +2639,32 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end)
 end)
 
+-- Track the player whose turn is named by InGame.Frame.Type.Text.
+-- Example: "username, type an english word starting with:"
+-- Their live word is read from Character.Head.HairAttachment.Bubble.Answer.Letter.
 local opponentWordStates = {}
-local currentOpponent = nil
+local lastActiveUsername = nil
 
-local function GetOpponent()
+local function GetTurnUsername()
     local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
     local inGame = playerGui and playerGui:FindFirstChild("InGame")
     local frame = inGame and inGame:FindFirstChild("Frame")
     local typeLabel = frame and frame:FindFirstChild("Type")
 
-    if not typeLabel then
+    if not typeLabel or not typeLabel:IsA("TextLabel") then
         return nil
     end
 
-    local username = typeLabel.Text:match("^%s*(.-),")
-
-    if not username or username == "" then
-        return nil
+    local username = typeLabel.Text:match("^%s*([^,]+),")
+    if username then
+        username = username:gsub("^%s+", ""):gsub("%s+$", "")
     end
 
-    local player = Players:FindFirstChild(username)
-
-    if player and player ~= Players.LocalPlayer then
-        return player
-    end
-
-    return nil
+    return username
 end
 
-local function GetOpponentWordLabel(player)
-    local character = player and player.Character
+local function GetPlayerWordLabel(player)
+    local character = player and (player.Character or workspace:FindFirstChild(player.Name))
     local head = character and character:FindFirstChild("Head")
     local hair = head and head:FindFirstChild("HairAttachment")
     local bubble = hair and hair:FindFirstChild("Bubble")
@@ -2682,71 +2678,90 @@ local function GetOpponentWordLabel(player)
     return nil
 end
 
+local function NormalizeTrackedWord(value)
+    return (value or ""):lower():gsub("[%s%c]+", "")
+end
+
+local function FinalizeOpponentWord(player)
+    local state = player and opponentWordStates[player]
+    if not state then return end
+
+    local candidate = NormalizeTrackedWord(state.candidate)
+    state.candidate = ""
+
+    if candidate ~= "" and candidate ~= "..." and candidate ~= "…" and IsDictionaryWord(candidate) then
+        MarkWordUsed(candidate)
+        print("[WordHelper] Opponent word used:", player.Name, candidate)
+    end
+end
+
 local function TrackOpponentWords()
-    if unloaded then
+    if unloaded then return end
+
+    local username = GetTurnUsername()
+    local activePlayer = username and Players:FindFirstChild(username) or nil
+
+    -- When the turn indicator moves to someone else, the previous player's
+    -- last visible word is treated as their submitted word.
+    if lastActiveUsername and lastActiveUsername ~= username then
+        local previousPlayer = Players:FindFirstChild(lastActiveUsername)
+        if previousPlayer and previousPlayer ~= Players.LocalPlayer then
+            FinalizeOpponentWord(previousPlayer)
+        end
+    end
+    lastActiveUsername = username
+
+    -- Only inspect the player explicitly named by the game's turn indicator.
+    if not activePlayer or activePlayer == Players.LocalPlayer then
         return
     end
 
-    local opponent = GetOpponent()
+    local label = GetPlayerWordLabel(activePlayer)
+    if not label then return end
 
-    -- Clear the previous opponent's tracking when the match changes.
-    if opponent ~= currentOpponent then
-        opponentWordStates = {}
-        currentOpponent = opponent
-    end
-
-    if not opponent then
-        return
-    end
-
-    local label = GetOpponentWordLabel(opponent)
-    if not label then
-        return
-    end
-
-    local state = opponentWordStates[opponent]
-
+    local state = opponentWordStates[activePlayer]
     if not state then
-        state = {
-            label = label,
-            candidate = "",
-        }
-
-        opponentWordStates[opponent] = state
+        state = { label = label, candidate = "", connection = nil }
+        opponentWordStates[activePlayer] = state
     elseif state.label ~= label then
+        if state.connection then
+            state.connection:Disconnect()
+        end
         state.label = label
         state.candidate = ""
+        state.connection = nil
     end
 
-    local current = (label.Text or ""):lower():gsub("[%s%c]+", "")
+    local function readOpponentText()
+        if unloaded or not label.Parent then return end
 
-    -- Ignore placeholder text.
-    if current == "" or current == "..." or current == "…" then
-        if state.candidate ~= "" then
-            local submitted = state.candidate
-            state.candidate = ""
-
-            if IsDictionaryWord(submitted) then
-                MarkWordUsed(submitted)
-            end
+        local current = NormalizeTrackedWord(label.Text)
+        if current ~= "" and current ~= "..." and current ~= "…" then
+            state.candidate = current
+        elseif state.candidate ~= "" then
+            -- Some rounds clear the bubble immediately after submission.
+            FinalizeOpponentWord(activePlayer)
         end
-    else
-        -- Remember the last word displayed before it resets.
-        state.candidate = current
     end
+
+    if not state.connection then
+        state.connection = label:GetPropertyChangedSignal("Text"):Connect(readOpponentText)
+    end
+
+    -- Read immediately as well, in case the word appeared before the listener.
+    readOpponentText()
 end
 
 task.spawn(function()
     while not unloaded do
-        local success, err = pcall(TrackOpponentWords)
-
-        if not success then
+        local ok, err = pcall(TrackOpponentWords)
+        if not ok then
             warn("[WordHelper] Opponent tracking error:", err)
         end
-
         task.wait(0.05)
     end
 end)
+
 
 local StatsData = {}
 
@@ -3060,32 +3075,8 @@ runConn = RunService.RenderStepped:Connect(function()
         end
     end)
 end)
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
 
-task.spawn(function()
-    while task.wait(2) do
-        print("===== OPPONENT TRACKING DEBUG =====")
-
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local model = workspace:FindFirstChild(player.Name)
-                print("Other player:", player.Name, "Workspace model:", model ~= nil)
-
-                if model then
-                    local head = model:FindFirstChild("Head")
-                    local hair = head and head:FindFirstChild("HairAttachment")
-                    local bubble = hair and hair:FindFirstChild("Bubble")
-                    local answer = bubble and bubble:FindFirstChild("Answer")
-                    local letter = answer and answer:FindFirstChild("Letter")
-
-                    print("Word label found:", letter ~= nil)
-
-                    if letter and letter:IsA("TextLabel") then
-                        print("Displayed word:", letter.Text)
-                    end
-                end
-            end
-        end
-    end
+inputConn = UserInputService.InputBegan:Connect(function(input)
+    if unloaded then return end
+    if input.KeyCode == TOGGLE_KEY then ScreenGui.Enabled = not ScreenGui.Enabled end
 end)
