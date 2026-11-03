@@ -524,7 +524,7 @@ Header.BackgroundColor3 = THEME.ItemBG
 Header.BorderSizePixel = 0
 
 local Title = Instance.new("TextLabel", Header)
-Title.Text = "Word<font color=\"rgb(114,100,255)\">Helper</font> V5"
+Title.Text = "Word<font color=\"rgb(114,100,255)\">Helper</font> V4"
 Title.RichText = true
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -657,7 +657,7 @@ SlidersFrame.Size = UDim2.new(1, 0, 0, 125)
 SlidersFrame.BackgroundTransparency = 1
 
 local TogglesFrame = Instance.new("Frame", SettingsFrame)
-TogglesFrame.Size = UDim2.new(1, 0, 0, 310)
+TogglesFrame.Size = UDim2.new(1, 0, 0, 340)
 TogglesFrame.Position = UDim2.new(0, 0, 0, 125)
 TogglesFrame.BackgroundTransparency = 1
 TogglesFrame.Visible = false
@@ -673,8 +673,8 @@ local function UpdateLayout()
         Tween(ScrollList, {Size = UDim2.new(1, -10, 1, -245)})
         TogglesFrame.Visible = false
     else
-        Tween(SettingsFrame, {Size = UDim2.new(1, 0, 0, 435), Position = UDim2.new(0, 0, 1, -435)})
-        Tween(ScrollList, {Size = UDim2.new(1, -10, 1, -555)})
+        Tween(SettingsFrame, {Size = UDim2.new(1, 0, 0, 465), Position = UDim2.new(0, 0, 1, -465)})
+        Tween(ScrollList, {Size = UDim2.new(1, -10, 1, -585)})
         TogglesFrame.Visible = true
     end
 end
@@ -1137,8 +1137,8 @@ DictionaryModeBtn.Font = Enum.Font.GothamMedium
 DictionaryModeBtn.TextSize = 11
 DictionaryModeBtn.TextColor3 = Config.DictionaryMode == "Casual" and THEME.Success or THEME.Accent
 DictionaryModeBtn.BackgroundColor3 = THEME.Background
-DictionaryModeBtn.Size = UDim2.new(0, 115, 0, 24)
-DictionaryModeBtn.Position = UDim2.new(0, 150, 0, 145)
+DictionaryModeBtn.Size = UDim2.new(0, 265, 0, 24)
+DictionaryModeBtn.Position = UDim2.new(0, 15, 0, 175)
 Instance.new("UICorner", DictionaryModeBtn).CornerRadius = UDim.new(0, 4)
 
 DictionaryModeBtn.MouseButton1Click:Connect(function()
@@ -1146,7 +1146,6 @@ DictionaryModeBtn.MouseButton1Click:Connect(function()
     DictionaryModeBtn.Text = "Mode: " .. Config.DictionaryMode
     DictionaryModeBtn.TextColor3 = Config.DictionaryMode == "Casual" and THEME.Success or THEME.Accent
 
-    -- Refresh suggestions immediately so excluded words disappear at once.
     if UpdateList then
         UpdateList(lastDetected, lastRequiredLetter)
     end
@@ -1161,7 +1160,7 @@ WordBrowserBtn.TextSize = 11
 WordBrowserBtn.TextColor3 = Color3.fromRGB(200, 150, 255)
 WordBrowserBtn.BackgroundColor3 = THEME.Background
 WordBrowserBtn.Size = UDim2.new(0, 265, 0, 24)
-WordBrowserBtn.Position = UDim2.new(0, 15, 0, 175)
+WordBrowserBtn.Position = UDim2.new(0, 15, 0, 205)
 Instance.new("UICorner", WordBrowserBtn).CornerRadius = UDim.new(0, 4)
 
 local ServerBrowserBtn = Instance.new("TextButton", TogglesFrame)
@@ -1171,7 +1170,7 @@ ServerBrowserBtn.TextSize = 11
 ServerBrowserBtn.TextColor3 = Color3.fromRGB(100, 200, 255)
 ServerBrowserBtn.BackgroundColor3 = THEME.Background
 ServerBrowserBtn.Size = UDim2.new(0, 265, 0, 24)
-ServerBrowserBtn.Position = UDim2.new(0, 15, 0, 205)
+ServerBrowserBtn.Position = UDim2.new(0, 15, 0, 235)
 Instance.new("UICorner", ServerBrowserBtn).CornerRadius = UDim.new(0, 4)
 
 local CustomWordsFrame = Instance.new("Frame", ScreenGui)
@@ -1310,8 +1309,6 @@ local function RefreshCustomWords()
             lbl.Position = UDim2.new(0, 5, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-            -- Removed nested invisible button to fix click handling
             
             local del = Instance.new("TextButton", row)
             del.Text = "X"
@@ -1656,7 +1653,6 @@ do
         lengthMode = lVal or 0
         Config.LengthMode = lengthMode
         
-        -- Trigger main list update
         if UpdateList then
             UpdateList(lastDetected, lastRequiredLetter)
         end
@@ -1712,7 +1708,6 @@ do
             lbl.BackgroundTransparency = 1
             lbl.TextXAlignment = Enum.TextXAlignment.Left
 
-            -- Removed nested invisible button to fix click handling
         end
         
         WBList.CanvasSize = UDim2.new(0,0,0, WBLayout.AbsoluteContentSize.Y)
