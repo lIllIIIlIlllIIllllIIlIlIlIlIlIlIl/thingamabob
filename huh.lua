@@ -63,7 +63,8 @@ local Config = {
     CustomWords = {},
     MinTypeSpeed = 50,
     MaxTypeSpeed = 3000,
-    KeyboardLayout = "QWERTY"
+    KeyboardLayout = "QWERTY",
+    DictionaryMode = "Pro"
 }
 
 local function SaveConfig()
@@ -81,6 +82,7 @@ local function LoadConfig()
     end
 end
 LoadConfig()
+Config.DictionaryMode = (Config.DictionaryMode == "Casual") and "Casual" or "Pro"
 
 local currentCPM = Config.CPM
 local isBlatant = Config.Blatant
@@ -1128,6 +1130,30 @@ ManageWordsBtn.Size = UDim2.new(0, 130, 0, 24)
 ManageWordsBtn.Position = UDim2.new(0, 15, 0, 145)
 Instance.new("UICorner", ManageWordsBtn).CornerRadius = UDim.new(0, 4)
 
+local DictionaryModeBtn = Instance.new("TextButton", TogglesFrame)
+DictionaryModeBtn.Name = "DictionaryMode"
+DictionaryModeBtn.Text = "Mode: " .. Config.DictionaryMode
+DictionaryModeBtn.Font = Enum.Font.GothamMedium
+DictionaryModeBtn.TextSize = 11
+DictionaryModeBtn.TextColor3 = Config.DictionaryMode == "Casual" and THEME.Success or THEME.Accent
+DictionaryModeBtn.BackgroundColor3 = THEME.Background
+DictionaryModeBtn.Size = UDim2.new(0, 115, 0, 24)
+DictionaryModeBtn.Position = UDim2.new(0, 150, 0, 145)
+Instance.new("UICorner", DictionaryModeBtn).CornerRadius = UDim.new(0, 4)
+
+DictionaryModeBtn.MouseButton1Click:Connect(function()
+    Config.DictionaryMode = Config.DictionaryMode == "Casual" and "Pro" or "Casual"
+    DictionaryModeBtn.Text = "Mode: " .. Config.DictionaryMode
+    DictionaryModeBtn.TextColor3 = Config.DictionaryMode == "Casual" and THEME.Success or THEME.Accent
+
+    -- Refresh suggestions immediately so excluded words disappear at once.
+    if UpdateList then
+        UpdateList(lastDetected, lastRequiredLetter)
+    end
+    forceUpdateList = true
+    SaveConfig()
+end)
+
 local WordBrowserBtn = Instance.new("TextButton", TogglesFrame)
 WordBrowserBtn.Text = "Word Browser"
 WordBrowserBtn.Font = Enum.Font.GothamMedium
@@ -1937,11 +1963,20 @@ local function MarkWordUsed(word)
     forceUpdateList = true
 end
 
+-- Casual mode excludes every dictionary entry containing an apostrophe or hyphen.
+local function IsAllowedByDictionaryMode(word)
+    if Config.DictionaryMode == "Casual" then
+        return not word:find("['%-]")
+    end
+    return true
+end
+
 -- Checks the actual dictionary so normal GUI text/search fields cannot
 -- accidentally consume a word.
 local function IsDictionaryWord(word)
     if not word or word == "" then return false end
     word = word:lower():gsub("[%s%c]+", "")
+    if not IsAllowedByDictionaryMode(word) then return false end
     local first = word:sub(1, 1)
     local bucket = Buckets and Buckets[first]
     if not bucket then return false end
@@ -2306,7 +2341,7 @@ UpdateList = function(detectedText, requiredLetter)
         
         if bucket then
             local checkWord = function(w)
-                if Blacklist[w] or UsedWords[w] then return end
+                if Blacklist[w] or UsedWords[w] or not IsAllowedByDictionaryMode(w) then return end
                 
                 -- Check for main list filtering (suffix/length)
                 if suffixMode ~= "" and w:sub(-#suffixMode) ~= suffixMode then return end
@@ -2388,7 +2423,7 @@ UpdateList = function(detectedText, requiredLetter)
             local fallbackBucket = (Buckets and Buckets[reqChar]) or Words
             if fallbackBucket then
                 for _, w in ipairs(fallbackBucket) do
-                    if not Blacklist[w] and not UsedWords[w] then
+                    if not Blacklist[w] and not UsedWords[w] and IsAllowedByDictionaryMode(w) then
                          local mLen = GetMatchLength(w, requiredLetter)
                          if mLen == #requiredLetter then
                              table.insert(matches, w)
@@ -2858,7 +2893,7 @@ runConn = RunService.RenderStepped:Connect(function()
                 local bestWord = nil
                 local bestLen = 999
                 for _, w in ipairs(bucket) do
-                    if not Blacklist[w] and not UsedWords[w] and w:sub(1, #detected) == detected then
+                    if not Blacklist[w] and not UsedWords[w] and IsAllowedByDictionaryMode(w) and w:sub(1, #detected) == detected then
                         if #w < bestLen then
                             bestWord = w
                             bestLen = #w
