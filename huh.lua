@@ -2639,84 +2639,29 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end)
 end)
 
--- Opponent word tracking using Tables, Chairs, and Base positions.
 local opponentWordStates = {}
 local currentOpponent = nil
 
-local function HorizontalDistance(a, b)
-    local dx = a.X - b.X
-    local dz = a.Z - b.Z
-    return math.sqrt(dx * dx + dz * dz)
-end
-
-local function GetBase(chairs, chairName)
-    local chair = chairs and chairs:FindFirstChild(chairName)
-    return chair and chair:FindFirstChild("Base")
-end
-
 local function GetOpponent()
-    local tables = workspace:FindFirstChild("Tables")
-    if not tables then
+    local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+    local inGame = playerGui and playerGui:FindFirstChild("InGame")
+    local frame = inGame and inGame:FindFirstChild("Frame")
+    local typeLabel = frame and frame:FindFirstChild("Type")
+
+    if not typeLabel then
         return nil
     end
 
-    local myCharacter = Players.LocalPlayer.Character
-    local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+    local username = typeLabel.Text:match("^%s*(.-),")
 
-    if not myRoot then
+    if not username or username == "" then
         return nil
     end
 
-    -- Find which table and side our character is closest to.
-    for i = 1, 6 do
-        local tableModel = tables:FindFirstChild(tostring(i))
-        local chairs = tableModel and tableModel:FindFirstChild("Chairs")
+    local player = Players:FindFirstChild(username)
 
-        if chairs then
-            local base1 = GetBase(chairs, "1")
-            local base2 = GetBase(chairs, "2")
-
-            if base1 and base2 and base1:IsA("BasePart") and base2:IsA("BasePart") then
-                local distance1 = HorizontalDistance(
-                    myRoot.Position,
-                    base1.Position
-                )
-
-                local distance2 = HorizontalDistance(
-                    myRoot.Position,
-                    base2.Position
-                )
-
-                local opponentBase = nil
-
-                if distance1 <= 4 then
-                    opponentBase = base2
-                elseif distance2 <= 4 then
-                    opponentBase = base1
-                end
-
-                if opponentBase then
-                    -- Find the player whose character is near the opposite Base.
-                    for _, player in ipairs(Players:GetPlayers()) do
-                        if player ~= Players.LocalPlayer then
-                            local character = player.Character
-                            local root = character and character:FindFirstChild("HumanoidRootPart")
-
-                            if root then
-                                local distance = HorizontalDistance(
-                                    root.Position,
-                                    opponentBase.Position
-                                )
-
-                                if distance <= 4 then
-                                    return player
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    if player and player ~= Players.LocalPlayer then
+        return player
     end
 
     return nil
@@ -3121,44 +3066,6 @@ local LocalPlayer = Players.LocalPlayer
 task.spawn(function()
     while task.wait(2) do
         print("===== OPPONENT TRACKING DEBUG =====")
-
-        local tables = workspace:FindFirstChild("Tables")
-        print("Tables folder:", tables ~= nil)
-
-        local character = LocalPlayer.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-
-        if root then
-            print("Your position:", root.Position)
-
-            if tables then
-                for i = 1, 6 do
-                    local tableModel = tables:FindFirstChild(tostring(i))
-                    local chairs = tableModel and tableModel:FindFirstChild("Chairs")
-
-                    if chairs then
-                        for j = 1, 2 do
-                            local chair = chairs:FindFirstChild(tostring(j))
-                            local base = chair and chair:FindFirstChild("Base")
-
-                            if base and base:IsA("BasePart") then
-                                local dx = root.Position.X - base.Position.X
-                                local dz = root.Position.Z - base.Position.Z
-                                local distance = math.sqrt(dx * dx + dz * dz)
-
-                                print(
-                                    "Table:", i,
-                                    "Chair:", j,
-                                    "Distance:", distance
-                                )
-                            end
-                        end
-                    end
-                end
-            end
-        else
-            print("ERROR: Your HumanoidRootPart was not found")
-        end
 
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
