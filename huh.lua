@@ -41,23 +41,23 @@ end
 
 local ConfigFile = "WordHelper_Config.json"
 local Config = {
-    CPM = 550,
+    CPM = 1500,
     Blatant = false,
     Humanize = true,
     FingerModel = true,
-    SortMode = "Random",
+    SortMode = "Shortest",
     SuffixMode = "",
     LengthMode = 0,
     AutoPlay = false,
     AutoJoin = false,
     AutoJoinSettings = {
-        _1v1 = true,
-        _4p = true,
-        _8p = true
+        _1v1 = false,
+        _4p = false,
+        _8p = false
     },
     PanicMode = true,
     ShowKeyboard = false,
-    ErrorRate = 5,
+    ErrorRate = 0,
     ThinkDelay = 0,
     RiskyMistakes = false,
     CustomWords = {},
