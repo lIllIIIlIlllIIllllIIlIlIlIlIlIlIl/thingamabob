@@ -18,9 +18,9 @@ local GuiService = cloneref(game:GetService("GuiService"))
 local request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
 local TOGGLE_KEY = Enum.KeyCode.RightControl
-local MIN_CPM = 50
-local MAX_CPM_LEGIT = 1500
-local MAX_CPM_BLATANT = 3000
+local MIN_CPM = 1200
+local MAX_CPM_LEGIT = 1600
+local MAX_CPM_BLATANT = 1600
 
 math.randomseed(os.time())
 
@@ -61,8 +61,8 @@ local Config = {
     ThinkDelay = 0,
     RiskyMistakes = false,
     CustomWords = {},
-    MinTypeSpeed = 50,
-    MaxTypeSpeed = 3000,
+    MinTypeSpeed = 1200,
+    MaxTypeSpeed = 1600,
     KeyboardLayout = "QWERTY",
     DictionaryMode = "Pro",
     VisualCorrection = false
@@ -84,6 +84,9 @@ local function LoadConfig()
 end
 LoadConfig()
 Config.DictionaryMode = (Config.DictionaryMode == "Casual") and "Casual" or "Pro"
+Config.CPM = 1250
+Config.Humanize = true
+Config.FingerModel = true
 
 local currentCPM = Config.CPM
 local isBlatant = Config.Blatant
@@ -936,7 +939,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 local SliderLabel = Instance.new("TextLabel", SlidersFrame)
-SliderLabel.Text = "Speed: " .. currentCPM .. " CPM"
+SliderLabel.Text = "Speed: " .. math.floor(currentCPM / 5) .. " WPM (" .. currentCPM .. " CPM)"
 SliderLabel.Font = Enum.Font.GothamMedium
 SliderLabel.TextSize = 12
 SliderLabel.TextColor3 = THEME.SubText
@@ -952,7 +955,7 @@ SliderBg.BackgroundColor3 = THEME.Slider
 Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(1, 0)
 
 local SliderFill = Instance.new("Frame", SliderBg)
-SliderFill.Size = UDim2.new(0.5, 0, 1, 0)
+SliderFill.Size = UDim2.new(math.clamp((currentCPM - MIN_CPM) / (MAX_CPM_LEGIT - MIN_CPM), 0, 1), 0, 1, 0)
 SliderFill.BackgroundColor3 = THEME.Accent
 Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(1, 0)
 
@@ -1825,6 +1828,8 @@ do
     for i = 1, #row3 do
         KEY_POS[row3:sub(i,i)] = {x = i + 1, y = 3}
     end
+    KEY_POS["'"] = {x = 10.5, y = 2}
+    KEY_POS["-"] = {x = 11, y = 1}
 end
 
 local function KeyDistance(a, b)
@@ -1880,6 +1885,8 @@ local function GetKeyCode(char)
     local layout = Config.KeyboardLayout or "QWERTY"
     
     if type(char) == "string" and #char == 1 then
+        if char == "'" then return Enum.KeyCode.Quote end
+        if char == "-" then return Enum.KeyCode.Minus end
         char = char:lower()
         if layout == "QWERTZ" then
             if char == "z" then return Enum.KeyCode.Y end
@@ -2670,7 +2677,7 @@ SetupSlider(SliderBtn, SliderBg, SliderFill, function(pct)
     local max = isBlatant and MAX_CPM_BLATANT or MAX_CPM_LEGIT
     currentCPM = math.floor(MIN_CPM + (pct * (max - MIN_CPM)))
     SliderFill.Size = UDim2.new(pct, 0, 1, 0)
-    SliderLabel.Text = "Speed: " .. currentCPM .. " CPM"
+    SliderLabel.Text = "Speed: " .. math.floor(currentCPM / 5) .. " WPM (" .. currentCPM .. " CPM)"
     if currentCPM > 900 then Tween(SliderFill, {BackgroundColor3 = Color3.fromRGB(255,80,80)}) 
     else Tween(SliderFill, {BackgroundColor3 = THEME.Accent}) end
 end)
