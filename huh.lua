@@ -18,10 +18,11 @@ local GuiService = cloneref(game:GetService("GuiService"))
 local request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
 local TOGGLE_KEY = Enum.KeyCode.RightControl
-local MIN_CPM = 1200
-local MAX_CPM_LEGIT = 1600
-local MAX_CPM_BLATANT = 1600
-local AUTOTYPE_DELAY_SCALE = 0.5
+local MIN_CPM = 5000
+local MAX_CPM_LEGIT = 10000
+local MAX_CPM_BLATANT = 10000
+local AUTOTYPE_DELAY_SCALE = 0
+local INSTANT_AUTOTYPE = true
 
 math.randomseed(os.time())
 
@@ -42,7 +43,7 @@ end
 
 local ConfigFile = "WordHelper_Config.json"
 local Config = {
-    CPM = 1600,
+    CPM = 5000,
     Blatant = false,
     Humanize = true,
     FingerModel = true,
@@ -62,8 +63,8 @@ local Config = {
     ThinkDelay = 0,
     RiskyMistakes = false,
     CustomWords = {},
-    MinTypeSpeed = 1200,
-    MaxTypeSpeed = 1600,
+    MinTypeSpeed = 5000,
+    MaxTypeSpeed = 10000,
     KeyboardLayout = "QWERTY",
     DictionaryMode = "Pro",
     VisualCorrection = false
@@ -85,9 +86,13 @@ local function LoadConfig()
 end
 LoadConfig()
 Config.DictionaryMode = (Config.DictionaryMode == "Casual") and "Casual" or "Pro"
-Config.CPM = 1250
-Config.Humanize = true
-Config.FingerModel = true
+Config.CPM = 10000
+Config.Humanize = false
+Config.FingerModel = false
+Config.ErrorRate = 0
+Config.ThinkDelay = 1
+Config.MinTypeSpeed = 5000
+Config.MaxTypeSpeed = 10000
 
 local currentCPM = Config.CPM
 local isBlatant = Config.Blatant
@@ -100,8 +105,8 @@ local autoPlay = Config.AutoPlay
 local autoJoin = Config.AutoJoin
 local panicMode = Config.PanicMode
 local showKeyboard = Config.ShowKeyboard
-local errorRate = Config.ErrorRate
-local thinkDelayCurrent = math.clamp(tonumber(Config.ThinkDelay) or 0, 0, 0.2)
+local errorRate = 0
+local thinkDelayCurrent = 1
 local riskyMistakes = Config.RiskyMistakes
 local keyboardLayout = Config.KeyboardLayout or "QWERTY"
 
@@ -132,7 +137,7 @@ local ButtonCache = {}
 local ButtonData = {}
 local JoinDebounce = {}
 local thinkDelayMin = 0
-local thinkDelayMax = 0.2
+local thinkDelayMax = 1
 
 local listUpdatePending = false
 local forceUpdateList = false
@@ -991,12 +996,9 @@ ErrorBtn.Size = UDim2.new(1,0,1,0)
 ErrorBtn.BackgroundTransparency = 1
 ErrorBtn.Text = ""
 
-SetupSlider(ErrorBtn, ErrorBg, ErrorFill, function(pct)
-    errorRate = math.floor(pct * 30)
-    Config.ErrorRate = errorRate
-    ErrorFill.Size = UDim2.new(pct, 0, 1, 0)
-    ErrorLabel.Text = "Error Rate: " .. errorRate .. "% (per-letter)"
-end)
+ErrorBtn.Active = false
+ErrorBtn.AutoButtonColor = false
+ErrorLabel.Text = "Error Rate: 0% (disabled)"
 
 local ThinkLabel = Instance.new("TextLabel", SlidersFrame)
 ThinkLabel.Text = string.format("Think: %.2fs", thinkDelayCurrent)
@@ -1015,7 +1017,7 @@ ThinkBg.BackgroundColor3 = THEME.Slider
 Instance.new("UICorner", ThinkBg).CornerRadius = UDim.new(1, 0)
 
 local ThinkFill = Instance.new("Frame", ThinkBg)
-local thinkPct = (thinkDelayCurrent - thinkDelayMin) / (thinkDelayMax - thinkDelayMin)
+local thinkPct = 1
 ThinkFill.Size = UDim2.new(thinkPct, 0, 1, 0)
 ThinkFill.BackgroundColor3 = THEME.Accent
 Instance.new("UICorner", ThinkFill).CornerRadius = UDim.new(1, 0)
@@ -1025,12 +1027,8 @@ ThinkBtn.Size = UDim2.new(1,0,1,0)
 ThinkBtn.BackgroundTransparency = 1
 ThinkBtn.Text = ""
 
-SetupSlider(ThinkBtn, ThinkBg, ThinkFill, function(pct)
-    thinkDelayCurrent = thinkDelayMin + pct * (thinkDelayMax - thinkDelayMin)
-    Config.ThinkDelay = thinkDelayCurrent
-    ThinkFill.Size = UDim2.new(pct, 0, 1, 0)
-    ThinkLabel.Text = string.format("Think: %.2fs", thinkDelayCurrent)
-end)
+ThinkBtn.Active = false
+ThinkBtn.AutoButtonColor = false
 
 local function CreateToggle(text, pos, callback)
     local btn = Instance.new("TextButton", TogglesFrame)
@@ -1052,19 +1050,25 @@ local function CreateToggle(text, pos, callback)
     return btn
 end
 
-local HumanizeBtn = CreateToggle("Humanize: "..(useHumanization and "ON" or "OFF"), UDim2.new(0, 15, 0, 5), function()
-    useHumanization = not useHumanization
-    Config.Humanize = useHumanization
-    return useHumanization, "Humanize: "..(useHumanization and "ON" or "OFF"), useHumanization and THEME.Success or Color3.fromRGB(255, 100, 100)
+local HumanizeBtn = CreateToggle("Humanize: OFF", UDim2.new(0, 15, 0, 5), function()
+    useHumanization = false
+    Config.Humanize = false
+    return false, "Humanize: OFF", Color3.fromRGB(255, 100, 100)
 end)
-HumanizeBtn.TextColor3 = useHumanization and THEME.Success or Color3.fromRGB(255, 100, 100)
+useHumanization = false
+HumanizeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+HumanizeBtn.Active = false
+HumanizeBtn.AutoButtonColor = false
 
-local FingerBtn = CreateToggle("10-Finger: "..(useFingerModel and "ON" or "OFF"), UDim2.new(0, 105, 0, 5), function()
-    useFingerModel = not useFingerModel
-    Config.FingerModel = useFingerModel
-    return useFingerModel, "10-Finger: "..(useFingerModel and "ON" or "OFF"), useFingerModel and THEME.Success or Color3.fromRGB(255, 100, 100)
+local FingerBtn = CreateToggle("10-Finger: OFF", UDim2.new(0, 105, 0, 5), function()
+    useFingerModel = false
+    Config.FingerModel = false
+    return false, "10-Finger: OFF", Color3.fromRGB(255, 100, 100)
 end)
-FingerBtn.TextColor3 = useFingerModel and THEME.Success or Color3.fromRGB(255, 100, 100)
+useFingerModel = false
+FingerBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+FingerBtn.Active = false
+FingerBtn.AutoButtonColor = false
 
 local KeyboardBtn = CreateToggle("Keyboard: "..(showKeyboard and "ON" or "OFF"), UDim2.new(0, 195, 0, 5), function()
     showKeyboard = not showKeyboard
@@ -1922,7 +1926,6 @@ local function SimulateKey(input)
              if key then
                  pcall(function()
                      VirtualInputManager:SendKeyEvent(true, key, false, game)
-                     task.wait(0.01)
                      VirtualInputManager:SendKeyEvent(false, key, false, game)
                  end)
              end
@@ -1938,12 +1941,8 @@ local function SimulateKey(input)
     end
 
     if key then
-        local baseHold = math.clamp(12 / currentCPM, 0.015, 0.05)
-        local hold = isBlatant and 0.002 or (baseHold + (math.random() * 0.01) - 0.005)
-
         local vimSuccess = pcall(function()
             VirtualInputManager:SendKeyEvent(true, key, false, game)
-            task.wait(hold)
             VirtualInputManager:SendKeyEvent(false, key, false, game)
         end)
 
@@ -1953,6 +1952,38 @@ local function SimulateKey(input)
             end)
         end
     end
+end
+
+local function SimulateText(text)
+    if type(text) ~= "string" or text == "" then return true end
+
+    local sent = pcall(function()
+        VirtualInputManager:SendTextInput(text)
+    end)
+    if sent then return true end
+
+    for i = 1, #text do
+        local char = text:sub(i, i)
+        local key = GetKeyCode(char)
+        if key then
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, key, false, game)
+                VirtualInputManager:SendKeyEvent(false, key, false, game)
+            end)
+        end
+    end
+    return true
+end
+
+local GetActualGameTextBox
+
+local function SetInstantGameText(fullWord, fallbackText)
+    local gameBox = GetActualGameTextBox()
+    if gameBox and gameBox.TextEditable then
+        gameBox.Text = fullWord
+        return true
+    end
+    return SimulateText(fallbackText or fullWord)
 end
 
 local function Backspace(count)
@@ -1970,7 +2001,6 @@ local function Backspace(count)
             VirtualInputManager:SendKeyEvent(true, key, false, game)
             VirtualInputManager:SendKeyEvent(false, key, false, game)
         end)
-        if i % 20 == 0 then task.wait() end
     end
     lastKey = nil
 end
@@ -2001,7 +2031,7 @@ end
 -- Tracking must ONLY use a TextBox inside the actual game's InGame UI.
 -- Never fall back to the currently focused box, because that may be our
 -- helper's SearchBox.
-local function GetActualGameTextBox()
+GetActualGameTextBox = function()
     local player = Players.LocalPlayer
     local gui = player and player:FindFirstChild("PlayerGui")
     local inGame = gui and gui:FindFirstChild("InGame")
@@ -2087,12 +2117,13 @@ local function SmartType(targetWord, currentDetected, isCorrection, bypassTurn)
     isTyping = true
     lastTypingStart = tick()
     
-    local targetBox = GetGameTextBox()
+    local targetBox = GetActualGameTextBox()
     if targetBox then
         targetBox:CaptureFocus()
-        task.wait(0.1)
     end
-    
+
+    task.wait(1)
+
     StatusText.Text = "Typing..."
     StatusText.TextColor3 = THEME.Accent
     Tween(StatusDot, {BackgroundColor3 = THEME.Accent})
@@ -2110,31 +2141,20 @@ local function SmartType(targetWord, currentDetected, isCorrection, bypassTurn)
             end
 
             local backspaceCount = #currentDetected - commonLen
-            if backspaceCount > 0 then
-                Backspace(backspaceCount)
-                task.wait(0.15)
-            end
-            
             local toType = targetWord:sub(commonLen + 1)
-            for i = 1, #toType do
-                if not bypassTurn and not GetTurnInfo() then
-                    -- Double check if turn info is just flickering
-                    task.wait(0.05)
-                    if not GetTurnInfo() then break end
-                end
-                local ch = toType:sub(i, i)
-                SimulateKey(ch)
-                task.wait(CalculateDelayForKeys(lastKey, ch))
-                lastKey = ch
-                if useHumanization and math.random() < 0.005 then
-                    task.wait(0.05 + math.random() * 0.08)
-                end
+            if not bypassTurn and not GetTurnInfo() then return end
+            local actualBox = GetActualGameTextBox()
+            if actualBox and actualBox.TextEditable then
+                actualBox.Text = targetWord
+            else
+                if backspaceCount > 0 then Backspace(backspaceCount) end
+                SimulateText(toType)
             end
+            lastKey = nil
 
             -- Pre-submission verify
             local finalCheck = GetGameTextBox()
             if not riskyMistakes then
-                task.wait(0.1)
                 finalCheck = GetGameTextBox()
                 if finalCheck and finalCheck.Text ~= targetWord then
                      StatusText.Text = "Typing mismatch detected!"
@@ -2196,7 +2216,6 @@ local function SmartType(targetWord, currentDetected, isCorrection, bypassTurn)
 
                 MarkWordUsed(targetWord)
                 isMyTurnLogDetected = false
-                task.wait(0.2)
             end
         else
             local missingPart = ""
@@ -2206,51 +2225,12 @@ local function SmartType(targetWord, currentDetected, isCorrection, bypassTurn)
                 missingPart = targetWord
             end
 
-            local letters = "abcdefghijklmnopqrstuvwxyz"
-            for i = 1, #missingPart do
-                if not bypassTurn and not GetTurnInfo() then
-                     -- Double check if turn info is just flickering
-                     task.wait(0.05)
-                     if not GetTurnInfo() then break end
-                end
-                local ch = missingPart:sub(i, i)
-                if errorRate > 0 and (math.random() < (errorRate / 100)) then
-                    local typoChar
-                    repeat
-                        local idx = math.random(1, #letters)
-                        typoChar = letters:sub(idx, idx)
-                    until typoChar ~= ch
-                    SimulateKey(typoChar)
-                    
-                    if riskyMistakes then
-                         task.wait(0.05 + math.random() * 0.1)
-                         PressEnter()
-                    end
-
-                    task.wait(CalculateDelayForKeys(lastKey, typoChar))
-                    lastKey = typoChar
-                    local realize = thinkDelayCurrent * (0.6 + math.random() * 0.8)
-                    task.wait(realize)
-                    SimulateKey(Enum.KeyCode.Backspace)
-                    lastKey = nil
-                    task.wait(0.05 + math.random() * 0.08)
-                    SimulateKey(ch)
-                    task.wait(CalculateDelayForKeys(lastKey, ch))
-                    lastKey = ch
-                else
-                    SimulateKey(ch)
-                    task.wait(CalculateDelayForKeys(lastKey, ch))
-                    lastKey = ch
-                end
-                if useHumanization and math.random() < 0.005 then
-                    task.wait(0.05 + math.random() * 0.08)
-                end
-            end
+            if not bypassTurn and not GetTurnInfo() then return end
+            if not SetInstantGameText(targetWord, missingPart) then return end
+            lastKey = nil
 
             -- Pre-submission verify
             if not riskyMistakes then
-                -- Wait a moment for last character to register
-                task.wait(0.1)
                 local finalCheck = GetGameTextBox()
                 if finalCheck and finalCheck.Text ~= targetWord then
                     StatusText.Text = "Typing mismatch detected!"
