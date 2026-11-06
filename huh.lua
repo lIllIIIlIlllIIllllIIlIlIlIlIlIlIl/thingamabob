@@ -21,6 +21,7 @@ local TOGGLE_KEY = Enum.KeyCode.RightControl
 local MIN_CPM = 1200
 local MAX_CPM_LEGIT = 1600
 local MAX_CPM_BLATANT = 1600
+local AUTOTYPE_DELAY_SCALE = 0.5
 
 math.randomseed(os.time())
 
@@ -41,17 +42,17 @@ end
 
 local ConfigFile = "WordHelper_Config.json"
 local Config = {
-    CPM = 1500,
+    CPM = 1600,
     Blatant = false,
     Humanize = true,
     FingerModel = true,
-    SortMode = "Shortest",
+    SortMode = "Random",
     SuffixMode = "",
     LengthMode = 0,
     AutoPlay = false,
     AutoJoin = false,
     AutoJoinSettings = {
-        _1v1 = false,
+        _1v1 = true,
         _4p = false,
         _8p = false
     },
@@ -579,7 +580,7 @@ Header.BackgroundColor3 = THEME.ItemBG
 Header.BorderSizePixel = 0
 
 local Title = Instance.new("TextLabel", Header)
-Title.Text = "Word<font color=\"rgb(114,100,255)\">Helper</font> V4"
+Title.Text = "Word<font color=\"rgb(114,100,255)\">Helper</font> V5"
 Title.RichText = true
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -1809,8 +1810,8 @@ end
 
 local function CalculateDelay()
     local charsPerMin = currentCPM
-    local baseDelay = 60 / charsPerMin
-    local variance = baseDelay * 0.4
+    local baseDelay = (60 / charsPerMin) * AUTOTYPE_DELAY_SCALE
+    local variance = baseDelay * 0.2
     return useHumanization and (baseDelay + math.random()*variance - (variance/2)) or baseDelay
 end
 
@@ -1846,20 +1847,19 @@ end
 
 local lastKey = nil
 local function CalculateDelayForKeys(prevChar, nextChar)
-    if isBlatant then 
-        return 60 / currentCPM 
+    local baseDelay = (60 / currentCPM) * AUTOTYPE_DELAY_SCALE
+
+    if isBlatant then
+        return baseDelay
     end
 
-    local charsPerMin = currentCPM
-    local baseDelay = 60 / charsPerMin
-    
-    local variance = baseDelay * 0.35
+    local variance = baseDelay * 0.2
     local extra = 0
-    
+
     if useHumanization and useFingerModel and prevChar and nextChar and prevChar ~= "" then
         local dist = KeyDistance(prevChar, nextChar)
-        extra = dist * 0.018 * (550 / math.max(150, currentCPM))
-        
+        extra = baseDelay * math.min(dist / 10, 1) * 0.08
+
         local pa = KEY_POS[prevChar:lower()]
         local pb = KEY_POS[nextChar:lower()]
         if pa and pb then
@@ -1872,10 +1872,10 @@ local function CalculateDelayForKeys(prevChar, nextChar)
     if useHumanization then
         local r = (math.random() + math.random() + math.random()) / 3
         local noise = (r * 2 - 1) * variance
-        return math.max(0.005, baseDelay + extra + noise)
-    else
-        return baseDelay
+        return math.max(0.001, baseDelay + extra + noise)
     end
+
+    return baseDelay
 end
 
 local VirtualUser = game:GetService("VirtualUser")
@@ -2126,8 +2126,8 @@ local function SmartType(targetWord, currentDetected, isCorrection, bypassTurn)
                 SimulateKey(ch)
                 task.wait(CalculateDelayForKeys(lastKey, ch))
                 lastKey = ch
-                if useHumanization and math.random() < 0.03 then
-                    task.wait(0.15 + math.random() * 0.45)
+                if useHumanization and math.random() < 0.005 then
+                    task.wait(0.05 + math.random() * 0.08)
                 end
             end
 
@@ -2242,8 +2242,8 @@ local function SmartType(targetWord, currentDetected, isCorrection, bypassTurn)
                     task.wait(CalculateDelayForKeys(lastKey, ch))
                     lastKey = ch
                 end
-                if useHumanization and math.random() < 0.03 then
-                    task.wait(0.12 + math.random() * 0.5)
+                if useHumanization and math.random() < 0.005 then
+                    task.wait(0.05 + math.random() * 0.08)
                 end
             end
 
