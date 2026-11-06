@@ -58,13 +58,14 @@ local Config = {
     PanicMode = true,
     ShowKeyboard = false,
     ErrorRate = 5,
-    ThinkDelay = 0.8,
+    ThinkDelay = 0,
     RiskyMistakes = false,
     CustomWords = {},
     MinTypeSpeed = 50,
     MaxTypeSpeed = 3000,
     KeyboardLayout = "QWERTY",
-    DictionaryMode = "Pro"
+    DictionaryMode = "Pro",
+    VisualCorrection = false
 }
 
 local function SaveConfig()
@@ -96,7 +97,7 @@ local autoJoin = Config.AutoJoin
 local panicMode = Config.PanicMode
 local showKeyboard = Config.ShowKeyboard
 local errorRate = Config.ErrorRate
-local thinkDelayCurrent = Config.ThinkDelay
+local thinkDelayCurrent = math.clamp(tonumber(Config.ThinkDelay) or 0, 0, 0.2)
 local riskyMistakes = Config.RiskyMistakes
 local keyboardLayout = Config.KeyboardLayout or "QWERTY"
 
@@ -126,8 +127,8 @@ local UpdateList
 local ButtonCache = {}
 local ButtonData = {}
 local JoinDebounce = {}
-local thinkDelayMin = 0.4
-local thinkDelayMax = 1.2
+local thinkDelayMin = 0
+local thinkDelayMax = 0.2
 
 local listUpdatePending = false
 local forceUpdateList = false
@@ -350,6 +351,57 @@ local function GetCurrentGameWord(providedFrame)
     end
     
     return detected:lower():gsub(" ", ""), censored
+end
+
+-- Visual correction for transient GUI glitches caused by lag/high ping.
+-- It waits for the displayed word to stop changing; it does not guess letters.
+local visualReadCandidate = nil
+local visualReadSince = 0
+local visualReadStable = ""
+local VISUAL_STABLE_SECONDS = 0.10
+local lastOpponentWord = ""
+
+local function GetStableCurrentGameWord(providedFrame)
+    local detected, censored = GetCurrentGameWord(providedFrame)
+
+    if not Config.VisualCorrection then
+        visualReadCandidate = detected
+        visualReadStable = detected
+        visualReadSince = tick()
+        return detected, censored
+    end
+
+    if detected ~= visualReadCandidate then
+        visualReadCandidate = detected
+        visualReadSince = tick()
+        return visualReadStable, censored
+    end
+
+    if tick() - visualReadSince >= VISUAL_STABLE_SECONDS then
+        visualReadStable = detected
+    end
+
+    -- If the game scrambled the four-letter prefix, compare it with the
+    -- previous opponent's actual word ending and restore the correct order.
+    local stableWord = visualReadStable
+    local opponentSuffix = lastOpponentWord:sub(-4)
+    if #stableWord >= 4 and #opponentSuffix == 4 then
+        local function sortedLetters(value)
+            local chars = {}
+            for i = 1, #value do
+                chars[i] = value:sub(i, i)
+            end
+            table.sort(chars)
+            return table.concat(chars)
+        end
+
+        local shownPrefix = stableWord:sub(1, 4)
+        if sortedLetters(shownPrefix) == sortedLetters(opponentSuffix) then
+            stableWord = opponentSuffix .. stableWord:sub(5)
+        end
+    end
+
+    return stableWord, censored
 end
 
 local function GetTurnInfo(providedFrame)
@@ -657,7 +709,7 @@ SlidersFrame.Size = UDim2.new(1, 0, 0, 125)
 SlidersFrame.BackgroundTransparency = 1
 
 local TogglesFrame = Instance.new("Frame", SettingsFrame)
-TogglesFrame.Size = UDim2.new(1, 0, 0, 340)
+TogglesFrame.Size = UDim2.new(1, 0, 0, 370)
 TogglesFrame.Position = UDim2.new(0, 0, 0, 125)
 TogglesFrame.BackgroundTransparency = 1
 TogglesFrame.Visible = false
@@ -673,8 +725,8 @@ local function UpdateLayout()
         Tween(ScrollList, {Size = UDim2.new(1, -10, 1, -245)})
         TogglesFrame.Visible = false
     else
-        Tween(SettingsFrame, {Size = UDim2.new(1, 0, 0, 465), Position = UDim2.new(0, 0, 1, -465)})
-        Tween(ScrollList, {Size = UDim2.new(1, -10, 1, -585)})
+        Tween(SettingsFrame, {Size = UDim2.new(1, 0, 0, 495), Position = UDim2.new(0, 0, 1, -495)})
+        Tween(ScrollList, {Size = UDim2.new(1, -10, 1, -615)})
         TogglesFrame.Visible = true
     end
 end
@@ -1146,9 +1198,32 @@ DictionaryModeBtn.MouseButton1Click:Connect(function()
     DictionaryModeBtn.Text = "Mode: " .. Config.DictionaryMode
     DictionaryModeBtn.TextColor3 = Config.DictionaryMode == "Casual" and THEME.Success or THEME.Accent
 
+    -- Refresh suggestions immediately so excluded words disappear at once.
     if UpdateList then
         UpdateList(lastDetected, lastRequiredLetter)
     end
+    forceUpdateList = true
+    SaveConfig()
+end)
+
+local VisualCorrectionBtn = Instance.new("TextButton", TogglesFrame)
+VisualCorrectionBtn.Name = "VisualCorrection"
+VisualCorrectionBtn.Text = "Visual Correction: " .. (Config.VisualCorrection and "ON" or "OFF")
+VisualCorrectionBtn.Font = Enum.Font.GothamMedium
+VisualCorrectionBtn.TextSize = 11
+VisualCorrectionBtn.TextColor3 = Config.VisualCorrection and THEME.Success or THEME.SubText
+VisualCorrectionBtn.BackgroundColor3 = THEME.Background
+VisualCorrectionBtn.Size = UDim2.new(0, 265, 0, 24)
+VisualCorrectionBtn.Position = UDim2.new(0, 15, 0, 205)
+Instance.new("UICorner", VisualCorrectionBtn).CornerRadius = UDim.new(0, 4)
+
+VisualCorrectionBtn.MouseButton1Click:Connect(function()
+    Config.VisualCorrection = not Config.VisualCorrection
+    VisualCorrectionBtn.Text = "Visual Correction: " .. (Config.VisualCorrection and "ON" or "OFF")
+    VisualCorrectionBtn.TextColor3 = Config.VisualCorrection and THEME.Success or THEME.SubText
+    visualReadCandidate = nil
+    visualReadStable = ""
+    visualReadSince = 0
     forceUpdateList = true
     SaveConfig()
 end)
@@ -1160,7 +1235,7 @@ WordBrowserBtn.TextSize = 11
 WordBrowserBtn.TextColor3 = Color3.fromRGB(200, 150, 255)
 WordBrowserBtn.BackgroundColor3 = THEME.Background
 WordBrowserBtn.Size = UDim2.new(0, 265, 0, 24)
-WordBrowserBtn.Position = UDim2.new(0, 15, 0, 205)
+WordBrowserBtn.Position = UDim2.new(0, 15, 0, 235)
 Instance.new("UICorner", WordBrowserBtn).CornerRadius = UDim.new(0, 4)
 
 local ServerBrowserBtn = Instance.new("TextButton", TogglesFrame)
@@ -1170,7 +1245,7 @@ ServerBrowserBtn.TextSize = 11
 ServerBrowserBtn.TextColor3 = Color3.fromRGB(100, 200, 255)
 ServerBrowserBtn.BackgroundColor3 = THEME.Background
 ServerBrowserBtn.Size = UDim2.new(0, 265, 0, 24)
-ServerBrowserBtn.Position = UDim2.new(0, 15, 0, 235)
+ServerBrowserBtn.Position = UDim2.new(0, 15, 0, 265)
 Instance.new("UICorner", ServerBrowserBtn).CornerRadius = UDim.new(0, 4)
 
 local CustomWordsFrame = Instance.new("Frame", ScreenGui)
@@ -1309,6 +1384,8 @@ local function RefreshCustomWords()
             lbl.Position = UDim2.new(0, 5, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            -- Removed nested invisible button to fix click handling
             
             local del = Instance.new("TextButton", row)
             del.Text = "X"
@@ -1653,6 +1730,7 @@ do
         lengthMode = lVal or 0
         Config.LengthMode = lengthMode
         
+        -- Trigger main list update
         if UpdateList then
             UpdateList(lastDetected, lastRequiredLetter)
         end
@@ -1708,6 +1786,7 @@ do
             lbl.BackgroundTransparency = 1
             lbl.TextXAlignment = Enum.TextXAlignment.Left
 
+            -- Removed nested invisible button to fix click handling
         end
         
         WBList.CanvasSize = UDim2.new(0,0,0, WBLayout.AbsoluteContentSize.Y)
@@ -2720,6 +2799,7 @@ local function FinalizeOpponentWord(player)
     state.candidate = ""
 
     if candidate ~= "" and candidate ~= "..." and candidate ~= "…" and IsDictionaryWord(candidate) then
+        lastOpponentWord = candidate
         MarkWordUsed(candidate)
         print("[WordHelper] Opponent word used:", player.Name, candidate)
     end
@@ -2875,7 +2955,7 @@ runConn = RunService.RenderStepped:Connect(function()
         local isMyTurn, requiredLetter = GetTurnInfo(frame)
         
         if (now - lastWordCheck) > 0.05 then
-            cachedDetected, cachedCensored = GetCurrentGameWord(frame)
+            cachedDetected, cachedCensored = GetStableCurrentGameWord(frame)
             lastWordCheck = now
         end
         local detected, censored = cachedDetected, cachedCensored
@@ -2988,6 +3068,10 @@ runConn = RunService.RenderStepped:Connect(function()
         local typeVisible = typeLbl and typeLbl.Visible
         if typeVisible and not lastTypeVisible then
             UsedWords = {}
+            lastOpponentWord = ""
+            visualReadCandidate = nil
+            visualReadStable = ""
+            visualReadSince = 0
             StatusText.Text = "New Round - Words Reset"
             StatusText.TextColor3 = THEME.Success
         end
@@ -3092,7 +3176,7 @@ runConn = RunService.RenderStepped:Connect(function()
                 local snapshotDetected = lastDetected
                 
                 task.spawn(function()
-                    local delay = isBlatant and 0.15 or (0.8 + math.random() * 0.5)
+                    local delay = isBlatant and 0 or 0.03
                     task.wait(delay)
                     
                     local stillMyTurn, _ = GetTurnInfo()
